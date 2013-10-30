@@ -93,11 +93,30 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
 
             double entropy = 0;
 
+
             // TODO Implement the entropy metric
+            /*
+            for(Long id : tagDAO.getItemIds().iterator())
+            {
+            */
+            // for each item
+            //for(;;) {
+            double prob = computeProbability();
+            entropy = computeEntropy(prob);
 
             totalEntropy += entropy;
             userCount += 1;
+            //}
             return new Object[]{entropy};
+        }
+
+        private double computeEntropy(double prob) {
+            return -prob * Math.log(prob);
+        }
+
+        private double computeProbability() {
+
+            return 0;  //To change body of created methods use File | Settings | File Templates.
         }
 
         /**
