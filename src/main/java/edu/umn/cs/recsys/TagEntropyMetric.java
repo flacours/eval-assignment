@@ -12,6 +12,8 @@ import org.grouplens.lenskit.eval.traintest.TestUser;
 import org.grouplens.lenskit.scored.ScoredId;
 import org.grouplens.lenskit.vectors.MutableSparseVector;
 import org.grouplens.lenskit.vectors.VectorEntry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import java.util.List;
@@ -23,7 +25,7 @@ import java.util.List;
 public class TagEntropyMetric extends AbstractTestUserMetric {
     private final int listSize;
     private final List<String> columns;
-
+    private static Logger logger = LoggerFactory.getLogger(TagEntropyMetric.class);
     /**
      * Construct a new tag entropy metric.
      * 
@@ -80,6 +82,8 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
         @Nonnull
         @Override
         public Object[] evaluate(TestUser testUser) {
+            logger.info("TagEntropy evaluate" + testUser.getUserId());
+
             List<ScoredId> recommendations =
                     testUser.getRecommendations(listSize,
                                                 ItemSelectors.allItems(),
@@ -95,19 +99,35 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
 
 
             // TODO Implement the entropy metric
-            /*
-            for(Long id : tagDAO.getItemIds().iterator())
+            double totalMovies = tagDAO.getItemIds().size();
+            logger.info(String.format("Number of movies %d", totalMovies));
+            MutableSparseVector tagVector = vocab.newTagVector();
+            for(ScoredId scoredId : recommendations)
             {
-            */
-            // for each item
-            //for(;;) {
-            double prob = computeProbability();
-            entropy = computeEntropy(prob);
+                long movieId = scoredId.getId();
+                for(String tag : tagDAO.getItemTags(movieId) ){
+                    long tagId = vocab.getTagId(tag);
+                    long numTagForMovie = 1;
+                    double val = 1/numTagForMovie;
+                    if(vocab.hasTag(tag) == false) {
+                       tagVector.set(tagId, val);
+                    } else {
+                       tagVector.add(tagId, val);
+                    }
+                }
+            }
+            tagVector.multiply(1.0/totalMovies);
+            double sum = tagVector.sum();
+            entropy = -sum * log2(sum);
+            logger.info(String.format("entropy = %f", entropy));
 
             totalEntropy += entropy;
             userCount += 1;
-            //}
             return new Object[]{entropy};
+        }
+
+        private double log2(double x) {
+            return Math.log(x)/Math.log(2.0d);
         }
 
         private double computeEntropy(double prob) {
