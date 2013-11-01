@@ -33,6 +33,7 @@ public class TagVocabulary {
             }
         }
         tagMap = bld.build();
+       // System.out.println("Size of vocabulary : " + tagMap.size());
     }
 
     public MutableSparseVector newTagVector() {

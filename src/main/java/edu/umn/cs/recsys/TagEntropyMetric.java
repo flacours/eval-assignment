@@ -82,7 +82,7 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
         @Nonnull
         @Override
         public Object[] evaluate(TestUser testUser) {
-            logger.info("TagEntropy evaluate" + testUser.getUserId());
+            //logger.info("TagEntropy evaluate: " + testUser.getUserId());
 
             List<ScoredId> recommendations =
                     testUser.getRecommendations(listSize,
@@ -99,30 +99,42 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
 
 
             // TODO Implement the entropy metric
-            double totalMovies = tagDAO.getItemIds().size();
-            logger.info(String.format("Number of movies %d", totalMovies));
-            MutableSparseVector tagVector = vocab.newTagVector();
-            for(ScoredId scoredId : recommendations)
-            {
-                long movieId = scoredId.getId();
-                for(String tag : tagDAO.getItemTags(movieId) ){
-                    long tagId = vocab.getTagId(tag);
-                    long numTagForMovie = 1;
-                    double val = 1/numTagForMovie;
-                    if(vocab.hasTag(tag) == false) {
-                       tagVector.set(tagId, val);
-                    } else {
-                       tagVector.add(tagId, val);
+            try {
+
+                int totalMovies = tagDAO.getItemIds().size();
+                //logger.info(String.format("Number of movies %d", totalMovies));
+
+                MutableSparseVector tagVector = vocab.newTagVector();
+                //logger.info(String.format("nb vocab : %d", tagVector.size()));
+                for(ScoredId scoredId : recommendations)
+                {
+                    long movieId = scoredId.getId();
+                    List<String> tags = tagDAO.getItemTags(movieId);
+                    int numTagForMovie = tags.size();
+                    //logger.info(String.format("num tag %d for movie: %d", movieId, numTagForMovie));
+                    for(String tag : tagDAO.getItemTags(movieId) ){
+                        long tagId = vocab.getTagId(tag);
+                        double val = 1.0/numTagForMovie;
+                        if(tagVector.containsKey(tagId) == false) {
+                            tagVector.set(tagId, val);
+                        } else {
+                            tagVector.add(tagId, val);
+                        }
                     }
                 }
+                tagVector.multiply(1.0/totalMovies);
+                double sum = tagVector.sum();
+                //logger.info(String.format("sum %f ", sum));
+                entropy = -sum * log2(sum);
+                //logger.info(String.format("entropy = %f", entropy));
             }
-            tagVector.multiply(1.0/totalMovies);
-            double sum = tagVector.sum();
-            entropy = -sum * log2(sum);
-            logger.info(String.format("entropy = %f", entropy));
-
+            catch (Exception ex){
+                logger.error(String.format("Exception : %s", ex.getMessage()));
+                ex.printStackTrace(System.out);
+            }
             totalEntropy += entropy;
             userCount += 1;
+
             return new Object[]{entropy};
         }
 
@@ -130,14 +142,6 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
             return Math.log(x)/Math.log(2.0d);
         }
 
-        private double computeEntropy(double prob) {
-            return -prob * Math.log(prob);
-        }
-
-        private double computeProbability() {
-
-            return 0;  //To change body of created methods use File | Settings | File Templates.
-        }
 
         /**
          * Get the final aggregate results.  This is called after all users have been evaluated, and
