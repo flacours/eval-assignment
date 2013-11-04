@@ -16,9 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 
 /**
  * A metric that measures the tag entropy of the recommended items.
@@ -28,6 +26,8 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
     private final int listSize;
     private final List<String> columns;
     private static Logger logger = LoggerFactory.getLogger(TagEntropyMetric.class);
+    private Boolean debug;
+    private Boolean debug2;
     /**
      * Construct a new tag entropy metric.
      * 
@@ -95,8 +95,9 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
             LenskitRecommender lkrec = (LenskitRecommender) testUser.getRecommender();
             ItemTagDAO tagDAO = lkrec.get(ItemTagDAO.class);
             TagVocabulary vocab = lkrec.get(TagVocabulary.class);
-            Boolean debug = testUser.getUserId() == 1 ? true : false;
+            debug = testUser.getUserId() == 1;
             if(debug) logger.info("TagEntropy evaluate: " + testUser.getUserId());
+            debug2 = debug && false;
 
 
             double entropy = 0;
@@ -106,61 +107,90 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
             try {
 
                 int l = recommendations.size();
-                if(debug) logger.info(String.format("L %d", l));
 
                 if(l > 0)
                 {
 
-                    HashSet<String> globalTags = new HashSet<String>();
                     MutableSparseVector tagVector = vocab.newTagVector();
+                    Map<Long, HashSet<String>> movieTags;
+                    movieTags = buildMovieTags(recommendations, tagDAO);
+                    double lSum = computeL(movieTags);
+                    if(debug) logger.info(String.format("lSum %f", lSum));
+
                     for(ScoredId scoredId : recommendations)
                     {
                         long movieId = scoredId.getId();
-                        List<String> tags = tagDAO.getItemTags(movieId);
-                        ArrayList<String> tagsLowerCase = new ArrayList();
-                        for(String s : tags) {
-                            tagsLowerCase.add(s.toLowerCase());
-                        }
-                        HashSet<String> uniqueTags = new HashSet<String>();
-                        for(String tag : tagsLowerCase ){
-                            if(uniqueTags.contains(tag)== false) uniqueTags.add(tag);
-                            if(globalTags.contains(tag)== false) globalTags.add(tag);
-                        }
-                        int numTagForMovie = uniqueTags.size();
-                        if(debug) logger.info(String.format("num tag %d for movie: %d", movieId, numTagForMovie));
-
-                        for(String tag : tagsLowerCase ){
+                        HashSet<String> tags = movieTags.get(movieId);
+                        for(String tag : tags)
+                        {
                             long tagId = vocab.getTagId(tag);
-                            double val = 1.0/numTagForMovie;
-                            if(tagVector.containsKey(tagId) == false) {
-                                tagVector.set(tagId, val);
-                            } else {
-                                val = tagVector.add(tagId, val);
+                            if(tagVector.containsKey(tagId) == false)
+                            {
+                                double px = computePx(movieTags, vocab, tag, lSum);
+                                double entropyTag = -px * log2(px);
+                               // if(debug) logger.info(String.format("entropy %f - px %f on tag %s", entropyTag, px, tag));
+                                //entropy += entropyTag;
+                                //if(debug) logger.info(String.format("global entropy %f", entropy));
+                                tagVector.set(tagId, entropyTag);
                             }
-                            //if(debug) logger.info(String.format("num tagId %d val %f nb tag movie: %d", tagId, val, numTagForMovie));
                         }
                     }
-                    //if(debug) logger.info(String.format("size tagVector: %d", tagVector.size()));
-                    //tagVector.multiply(1.0/l);
-                    double totalSum = tagVector.sum();
-
-                    //l = 100;
-                    if(debug) logger.info(String.format("sum : %f, l=%d", totalSum, l));
-                    totalSum = totalSum /l;
-                    double log2sum =  log2(totalSum);
-                    if(debug) logger.info(String.format("sum %f , log2sum %f", totalSum, log2sum));
-                    entropy = -totalSum * log2sum;
-                    if(debug) logger.info(String.format("entropy = %f", entropy));
+                    entropy = tagVector.sum();
                 }
             }
             catch (Exception ex){
                 logger.error(String.format("Exception : %s", ex.getMessage()));
                 ex.printStackTrace(System.out);
             }
+            if(debug) logger.info(String.format("Entropy %f", entropy));
             totalEntropy += entropy;
             userCount += 1;
 
             return new Object[]{entropy};
+        }
+
+        private double computePx( Map<Long, HashSet<String>> movieTags, TagVocabulary vocab, String tag, double lSum)
+        {
+
+            if(debug2) logger.info(String.format("compute px on tag %s", tag));
+            double sumMovieWithTag = 0;
+
+            for(Long movieId : movieTags.keySet()){
+                HashSet<String>tags = movieTags.get(movieId);
+                if(tags.contains(tag)) sumMovieWithTag++;
+            }
+            if(debug2) logger.info(String.format("sum moviewithtag %f on tag %s", sumMovieWithTag, tag));
+            return sumMovieWithTag/lSum;
+        }
+
+        private double computeL( Map<Long, HashSet<String>> movieTags)
+        {
+            double lSum = 0;
+            for(Long movieId : movieTags.keySet()){
+                lSum += movieTags.get(movieId).size();
+            }
+            return lSum;
+        }
+
+        private Map<Long, HashSet<String>> buildMovieTags(List<ScoredId> recommendations, ItemTagDAO tagDAO) {
+            Map<Long, HashSet<String>> movieTags = new HashMap<Long, HashSet<String>>();
+            for(ScoredId scoredId : recommendations)
+            {
+                long movieId = scoredId.getId();
+                List<String> tags = tagDAO.getItemTags(movieId);
+                ArrayList<String> tagsLowerCase = new ArrayList();
+                for(String s : tags) {
+                    tagsLowerCase.add(s.toLowerCase());
+                }
+                HashSet<String> uniqueTags = new HashSet<String>();
+                for(String tag : tagsLowerCase ) if (!uniqueTags.contains(tag)) uniqueTags.add(tag);
+                String v = "";
+                for(String s : tagsLowerCase) { v += " " + s; }
+                //logger.info("Tags " + v);
+                movieTags.put(Long.valueOf(movieId), uniqueTags);
+            }
+
+            return  movieTags;
         }
 
         private double log2(double x) {
