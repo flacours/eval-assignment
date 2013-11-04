@@ -91,11 +91,13 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
             if (recommendations == null) {
                 return new Object[1];
             }
+
             LenskitRecommender lkrec = (LenskitRecommender) testUser.getRecommender();
             ItemTagDAO tagDAO = lkrec.get(ItemTagDAO.class);
             TagVocabulary vocab = lkrec.get(TagVocabulary.class);
             Boolean debug = testUser.getUserId() == 1 ? true : false;
             if(debug) logger.info("TagEntropy evaluate: " + testUser.getUserId());
+
 
             double entropy = 0;
 
@@ -108,8 +110,9 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
 
                 if(l > 0)
                 {
-                    MutableSparseVector tagVector = vocab.newTagVector();
 
+                    HashSet<String> globalTags = new HashSet<String>();
+                    MutableSparseVector tagVector = vocab.newTagVector();
                     for(ScoredId scoredId : recommendations)
                     {
                         long movieId = scoredId.getId();
@@ -121,6 +124,7 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
                         HashSet<String> uniqueTags = new HashSet<String>();
                         for(String tag : tagsLowerCase ){
                             if(uniqueTags.contains(tag)== false) uniqueTags.add(tag);
+                            if(globalTags.contains(tag)== false) globalTags.add(tag);
                         }
                         int numTagForMovie = uniqueTags.size();
                         if(debug) logger.info(String.format("num tag %d for movie: %d", movieId, numTagForMovie));
@@ -128,20 +132,24 @@ public class TagEntropyMetric extends AbstractTestUserMetric {
                         for(String tag : tagsLowerCase ){
                             long tagId = vocab.getTagId(tag);
                             double val = 1.0/numTagForMovie;
-                            //if(debug) logger.info(String.format("num tagId %d val %f nb movie: %d", tagId, val, numTagForMovie));
                             if(tagVector.containsKey(tagId) == false) {
                                 tagVector.set(tagId, val);
                             } else {
-                                tagVector.add(tagId, val);
+                                val = tagVector.add(tagId, val);
                             }
+                            //if(debug) logger.info(String.format("num tagId %d val %f nb tag movie: %d", tagId, val, numTagForMovie));
                         }
                     }
-                    if(debug) logger.info(String.format("size tagVector: %d", tagVector.size()));
-                    tagVector.multiply(1.0/l);
-                    double sum = tagVector.sum();
-                    double log2sum =  log2(sum);
-                    if(debug) logger.info(String.format("sum %f , log2suum %f", sum, log2sum));
-                    entropy = -sum * log2sum;
+                    //if(debug) logger.info(String.format("size tagVector: %d", tagVector.size()));
+                    //tagVector.multiply(1.0/l);
+                    double totalSum = tagVector.sum();
+
+                    //l = 100;
+                    if(debug) logger.info(String.format("sum : %f, l=%d", totalSum, l));
+                    totalSum = totalSum /l;
+                    double log2sum =  log2(totalSum);
+                    if(debug) logger.info(String.format("sum %f , log2sum %f", totalSum, log2sum));
+                    entropy = -totalSum * log2sum;
                     if(debug) logger.info(String.format("entropy = %f", entropy));
                 }
             }

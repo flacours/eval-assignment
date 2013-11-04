@@ -68,7 +68,7 @@ metric topNnDCG {
     // measure the entropy of the top 10 items
     metric new TagEntropyMetric(10)
 
-
+              /*
 
 algorithm("GlobalMean") {
 include tagConfig
@@ -77,6 +77,7 @@ bind ItemScorer to GlobalMeanRatingItemScorer
 // recommendation is meaningless for this algorithm
 bind ItemRecommender to null
 }
+*/
 algorithm("Popular") {
 include tagConfig
 // score items by their popularity
@@ -85,7 +86,7 @@ bind ItemScorer to PopularityItemScorer
 bind RatingPredictor to null
 }
 
-
+       /*
     algorithm("ItemMean") {
         include tagConfig
         // score items by their mean rating
@@ -97,6 +98,7 @@ bind RatingPredictor to null
         bind ItemScorer to UserMeanItemScorer
         bind (UserMeanBaseline, ItemScorer) to ItemMeanRatingItemScorer
     }
+
     for (nnbrs in [5, 10, 15, 20, 25, 30, 40, 50, 75, 100]) {
 
         algorithm("UserUser") {
@@ -161,4 +163,5 @@ bind RatingPredictor to null
 
 
     }
+      */
 }
